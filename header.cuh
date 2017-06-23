@@ -1,6 +1,7 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <cmath>
+#include <cfloat>
 #include <vector>
 #include <string>
 #include <sstream> 
@@ -28,8 +29,10 @@
 #define n_Medium 1.4
 #define NAOfSource 0.4
 #define NAOfDetector 0.4
-#define AngleOfSource -46.0	//toward x axis :positive
-#define AngleOfDetector  46.0		//toward x axis :negative
+//#define AngleOfSource -46.0	//toward x axis :positive
+#define AngleOfSource 0 //Wang modified
+//#define AngleOfDetector  46.0		//toward x axis :negative
+#define AngleOfDetector 0  //Wang modified
 #define detect  1						// convolution:0 another:1
 
 
@@ -136,7 +139,7 @@ void mua_data_up(float *mua_out, float up_c, int length);
 void mus_data(float *mus, float A, float K, int length);
 void DataOutput(ScalingResult data);
 __global__ void runPhoton(photon *P, ScalingResult *dData, curandState *devState, float3 *dPATH, float *Grid, float *ma1, float *ma2, float *ms1, float *ms2,
-	float &Thickness_UpLayer, media *dM, fibers *dF, float Nsrc, float Ndetector, int Detect, int numPhoton, int NumDetectors);
+	float Thickness_UpLayer, media *dM, fibers *dF, float Nsrc, float Ndetector, int Detect, int numPhoton, int NumDetectors);
 __device__ float mut_0(media *dM);
 __device__ float afa_0(media *dM);
 __device__ float mut_1(float ms_1, float ma_1);
@@ -144,8 +147,7 @@ __device__ float afa_1(float ms_1, float mut_1);
 __device__ float mut_2(float ms_2, float ma_2);
 __device__ float afa_2(float ms_2, float mut_2);
 __device__ void Scaling(ScalingResult *data, float3 *dPATH, int tid, int NUM, float *ma1_out, float *ms1_out, float *ma2_out, float *ms2_out, float Thickness_UpLayer, media *dM, fibers *dF);
-__device__ void shift(float layer, float3 oldP, float3 newP, float3 &outP, int2 &c, float ma_1, float ms_1, float ma_2, float ms_2, media *dM);
-__device__ void scale(float ma_1, float ms_1, float ma_2, float ms_2, float thickness1, int &line_number, float3 newP, float3 &oldP, float3 &outP, int2 &count, media *dM);
+__device__ void scale(float c1, float c2, float thickness1, int &line_number, float3 &newP, float3 &oldP, float3 &outP, int2 &count);
 __device__ float simpson(float a, float b, int n, float Collect2Source, float r);
 __device__ float p(float x, float s, float r);
 

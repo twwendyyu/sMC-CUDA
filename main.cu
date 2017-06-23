@@ -12,7 +12,7 @@ int main()
 
 	diff = (std::clock() - start) / (long double)CLOCKS_PER_SEC;
 	cout << "computation time: " << diff << '\n';
-	//system("pause");
+	system("pause");
 
 
 

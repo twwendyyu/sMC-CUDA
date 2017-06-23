@@ -1,5 +1,4 @@
 #include "header.cuh"
-#include <cfloat>
 //============================================================================================================
 //Monte carlo Simulation core code
 //============================================================================================================
@@ -44,7 +43,9 @@ void get_fiber_parameters(fibers *dParameters)
 		hParameters[Number].radius = collect_r;
 		hParameters[Number].NA = NAOfDetector;
 		hParameters[Number].angle = AngleOfDetector * M_PI / 180;
-		hParameters[Number].position = ((illumination_r)+(collect_r)*(2 * Number - 1)) / cos(AngleOfDetector * M_PI / 180);
+		//hParameters[Number].position = ((illumination_r)+(collect_r)*(2 * Number - 1)) / cos(AngleOfDetector * M_PI / 180);
+		//hParameters[Number].position = ((illumination_r)+(collect_r)*(0.1 * Number - 1)) / cos(AngleOfDetector * M_PI / 180);
+		hParameters[Number].position = (0.02+0.02*(Number-1))/ cos(AngleOfDetector * M_PI / 180);  //Wang modified
 	}
 
 	cudaMemcpy(dParameters, hParameters, sizeof(fibers)*(numberOfDetectors + 1), cudaMemcpyHostToDevice);
@@ -415,32 +416,42 @@ __device__ void ClearRecordPath(float3 *dPATH, int tid)
 
 //Load optical parameter of two layer from "input_parameter_two_layer.txt" file
 //=========================================================================================================================================================================================================================================
-void get_optical_property(float & UpLayerCoefficient, float & A_UpLayer, float & K_UpLayer, float & Hb_BottomLayer, float & Sto2_BottomLayer, float & A_BottomLayer, float &K_BottomLayer, float &Thickness_UpLayer)
+void get_optical_property(float & UpLayerCoefficient, float & A_UpLayer, float & K_UpLayer, float & Hb_BottomLayer, float & Sto2_BottomLayer, float & A_BottomLayer, float &K_BottomLayer, float &Thickness_UpLayer, float &Collagen)
 {
 	ifstream finOpticalProperty;
 	finOpticalProperty.open("input_parameter_two_layer.txt", ios::in);
 
 	if (!finOpticalProperty) { cout << "fail read file" << endl; }
 
-	finOpticalProperty >> UpLayerCoefficient >> A_UpLayer >> K_UpLayer >> Hb_BottomLayer >> Sto2_BottomLayer >> A_BottomLayer >> K_BottomLayer >> Thickness_UpLayer;
+	finOpticalProperty >> UpLayerCoefficient >> A_UpLayer >> K_UpLayer >> Hb_BottomLayer >> Sto2_BottomLayer >> A_BottomLayer >> K_BottomLayer >> Thickness_UpLayer >> Collagen;
 	A_UpLayer = A_UpLayer * 10000;
 	A_BottomLayer = A_BottomLayer * 10000;
 }
 
 //輸入 extinct coefficient 並計算 光學參數
-void mua_data(float *mua_out, float f, float sto2, int length)
+void mua_data(float *mua_out, float f, float sto2, int length, float col)
 {
-	float  lamda, hemo, oxhemo;
+	float  lamda, hemo, oxhemo, collagen_ab;
 	int i = 0;
+	int j = 0;
 
 	ifstream infile;
 	infile.open("epsilon.txt");
+	
+	ifstream col_para;
+	col_para.open("collagen_mua_data.txt");
 
 	while (infile >> lamda >> oxhemo >> hemo) {
 		mua_out[i] = f*((sto2)*2.303*oxhemo / 64532 + (1 - sto2)*2.303*hemo / 64500);
 		i++;
 	}
+
+	while (col_para >> lamda >> collagen_ab){
+		mua_out[j] = mua_out[j] + col*collagen_ab;
+		j++;
+	}
 	infile.close();
+	col_para.close();
 }
 
 void mua_data_up(float *mua_out, float up_c, int length)
@@ -472,8 +483,8 @@ void DataOutput(ScalingResult *data)
 	ofstream foutForTotalRefelectance;
 	ofstream foutForReflectanceWithDistance;
 
-	foutForTotalRefelectance.open("/home/chao/Desktop/SMC/two_layer_mc_weight_with_scale.txt");
-	foutForReflectanceWithDistance.open("/home/chao/Desktop/SMC/two_layer_mc_weight_with_scale_and_r.txt");
+	foutForTotalRefelectance.open("C://Users//AZSXDCFVGBHNJ4Y6//Desktop//SMC_GPU//x64//Release//two_layer_mc_weight_with_scale.txt");
+	foutForReflectanceWithDistance.open("C://Users//AZSXDCFVGBHNJ4Y6//Desktop//SMC_GPU//x64//Release//two_layer_mc_weight_with_scale_and_r.txt");
 
 	int x = 0;
 
@@ -492,7 +503,7 @@ void DataOutput(ScalingResult *data)
 
 
 __global__ void runPhoton(photon *P, ScalingResult *dData, curandState *devState, float3 *dPATH, float *Grid, float *ma1, float *ma2, float *ms1, float *ms2,
-	float &Thickness_UpLayer, media *dM, fibers *dF, float Nsrc, float Ndetector, int Detect, int numPhoton, int NumDetectors)
+	float Thickness_UpLayer, media *dM, fibers *dF, float Nsrc, float Ndetector, int Detect, int numPhoton, int NumDetectors)
 {
 	int gid = blockIdx.x * blockDim.x + threadIdx.x;
 	int tid = threadIdx.x;
@@ -504,7 +515,6 @@ __global__ void runPhoton(photon *P, ScalingResult *dData, curandState *devState
 		if (!Specular(devState[gid], P[gid].uz, dM))
 		{
 			int layer = 0;
-			float WA = 0, WR = 0, WT = 0;
 			bool TIF = false, Absorb = false, Reflect = false, Transmit = false;
 			int run_number = 0;
 			changeDirectionDueToRefraction(P[gid].ux, P[gid].uy, P[gid].uz, dM);
@@ -515,10 +525,10 @@ __global__ void runPhoton(photon *P, ScalingResult *dData, curandState *devState
 
 				if (P[gid].z < 0) {
 					if (checkForTIF(devState[gid], P[gid], layer, dM)) {
-						TIF = true;run_number++;
+						TIF = true;
+						run_number++;
 						ModifyPositionAndDirection(dPATH, Grid, devState[gid], P[gid], layer, dM, TIF, tid, run_number);
-						direction(devState[gid], P[gid].ux, P[gid].uy, P[gid].uz, layer, dM);
-						
+						direction(devState[gid], P[gid].ux, P[gid].uy, P[gid].uz, layer, dM);						
 					} else {
 						TIF = false;
 						ModifyPositionAndDirection(dPATH, Grid, devState[gid], P[gid], layer, dM, TIF, tid, run_number);
@@ -526,10 +536,10 @@ __global__ void runPhoton(photon *P, ScalingResult *dData, curandState *devState
 					}
 				} else if (P[gid].z > dM[1].Thickness) {					
 					if (checkForTIF(devState[gid], P[gid], layer, dM)) {
-						TIF = true;run_number++;
+						TIF = true;
+						run_number++;
 						ModifyPositionAndDirection(dPATH, Grid, devState[gid], P[gid], layer, dM, TIF, tid, run_number);
-						direction(devState[gid], P[gid].ux, P[gid].uy, P[gid].uz, layer, dM);
-						
+						direction(devState[gid], P[gid].ux, P[gid].uy, P[gid].uz, layer, dM);						
 					} else {
 						TIF = false;
 						Transmit = true;
@@ -546,7 +556,8 @@ __global__ void runPhoton(photon *P, ScalingResult *dData, curandState *devState
 				}
 			}			
 			ClearRecordPath(dPATH, tid);
-		}
+			//P[gid].z = dPATH[blockSize * Threshold - 1].z;// mut_0(dM) / (ms1[275] + ma1[275]);
+		}		
 	}
 	__syncthreads();
 }
@@ -568,20 +579,10 @@ __device__ float mut_2(float ms_2, float ma_2)	{ return ms_2 + ma_2 ; }
 __device__ float afa_2(float ms_2, float mut_2)	{ return ms_2 / mut_2; }
 
 
-__device__ void Scaling(ScalingResult *data, float3 *dPATH, int tid, int NUM, float *ma1_out, float *ms1_out, float *ma2_out, float *ms2_out, float Thickness_UpLayer, media *dM, fibers *dF)
+__device__ void Scaling(ScalingResult *dData, float3 *dPATH, int tid, int NUM, float *ma1_out, float *ms1_out, float *ma2_out, float *ms2_out, float Thickness_UpLayer, media *dM, fibers *dF)
 {
-	float weight, ma_1 = 0.0, ma_2 = 0.0, ms_1 = 0.0, ms_2 = 0.0;
-	float Collect2Source = 0.0;
-	float lo = 0.0, up = 0.0, r = 0.0;
-	float p[10] = { 0.f };
-
-	float3 newP, oldP, outP;	
-	newP.x = 0, newP.y = 0, newP.z = 0;
-	oldP.x = 0, oldP.y = 0, oldP.z = 0;
-	outP.x = 0, outP.y = 0, outP.z = 0;
-
 	for (int i = 75; i<276; i++)
-	{
+	{		
 		int2 count_crash;
 		count_crash.x = 0;
 		count_crash.y = 0;
@@ -589,11 +590,17 @@ __device__ void Scaling(ScalingResult *data, float3 *dPATH, int tid, int NUM, fl
 		int CounterOfPhotons = 0;
 		int run_number = NUM;
 
-		ma_1 = ma1_out[i];
-		ms_1 = ms1_out[i];
-		ma_2 = ma2_out[i];
-		ms_2 = ms2_out[i];
+		float3 newP;
+		float3 oldP;
+		float3 outP;
+		newP.x = 0, newP.y = 0, newP.z = 0;
+		oldP.x = 0, oldP.y = 0, oldP.z = 0;
+		outP.x = 0, outP.y = 0, outP.z = 0;
 
+		float ma_1 = ma1_out[i], ms_1 = ms1_out[i], ma_2 = ma2_out[i], ms_2 = ms2_out[i];
+		float mut0 = mut_0(dM), mut1 = ms_1 + ma_1, mut2 = ms_2 + ma_2;
+		float c1 = mut0 / mut1, c2 = mut0 / mut2;
+		float peu_layer = Thickness_UpLayer / c1;
 		bool Flag = true;
 		
 		do{
@@ -604,25 +611,28 @@ __device__ void Scaling(ScalingResult *data, float3 *dPATH, int tid, int NUM, fl
 			else
 			{
 				newP = dPATH[CounterOfPhotons + tid * Threshold];
-
-				//scale(ma_1, ms_1, ma_2, ms_2, Thickness_UpLayer, line_number, newP, oldP, outP, count_crash, dM);
-
+				scale(c1, c2, peu_layer, line_number, newP, oldP, outP, count_crash);
 				CounterOfPhotons++;
 			}
 		} while (Flag && run_number < CounterOfPhotons);
-		
-		weight = 1 * (pow(afa_1(ms_1, mut_1(ms_1, ma_1)) / afa_0(dM), count_crash.x - 1))
-			*(pow(afa_2(ms_2, mut_2(ms_2, ma_2)) / afa_0(dM), count_crash.y));
+		//dPATH[blockSize * Threshold - 1].z = outP.x;
 
-		r = (outP.x * outP.x + outP.y * outP.y > 0.0f) ? sqrtf(outP.x * outP.x + outP.y * outP.y) : 0.f;
+		float r = (outP.x * outP.x + outP.y * outP.y > 0.0f) ? sqrtf(outP.x * outP.x + outP.y * outP.y) : 0.f;
 
-		data[0].r[i] = r;
-		data[0].weight[i] += weight;
+		dData[0].r[i] = r;
+
+		float weight = 1 * (pow(afa_1(ms_1, mut1) / afa_0(dM), count_crash.x - 1))*(pow(afa_2(ms_2, mut2) / afa_0(dM), count_crash.y));
+
+		dData[0].weight[i] += weight;
 
 		float FirstItem = 0.0, SecondItem = 0.0, ThirdItem = 0.0;
 
 		if (detect == 0)
 		{
+			float Collect2Source = 0.0;
+			float lo = 0.0, up = 0.0;
+			float p[10] = { 0.f };
+
 			for (int j = 0; j<numberOfDetectors; j++)
 			{
 				p[j] = 0.0;
@@ -660,11 +670,11 @@ __device__ void Scaling(ScalingResult *data, float3 *dPATH, int tid, int NUM, fl
 				}
 				if (p[j] <= FLT_MAX && p[j] >= -FLT_MAX)
 				{
-					data[0].r_vs_weight[i][j] += (weight*p[j]);
+					dData[0].r_vs_weight[i][j] += (weight*p[j]);
 				}
 				else
 				{
-					data[0].r_vs_weight[i][j] += 0;
+					dData[0].r_vs_weight[i][j] += 0;
 				}
 			}
 		}
@@ -676,98 +686,34 @@ __device__ void Scaling(ScalingResult *data, float3 *dPATH, int tid, int NUM, fl
 					((outP.x - dF[f].position) / (dF[f].radius / cos(dF[f].angle)))) +
 					(((outP.y) / dF[f].radius)*((outP.y) / dF[f].radius)) <= 1.0)
 				{
-					data[0].r_vs_weight[i][f - 1] += weight;
+					dData[0].r_vs_weight[i][f - 1] += weight;
 				}
 			}
-
 		}
 	}
 }
 
-__device__ void shift(float layer, float3 oldP, float3 newP, float3 &outP, int2 &c, float ma_1, float ms_1, float ma_2, float ms_2, media *dM)
+__device__ void scale(float c1, float c2, float peu_layer1, int &line_number, float3 &newP, float3 &oldP, float3& outP, int2 &crash)
 {
-	float C1 = (mut_0(dM) / mut_1(ms_1, ma_1)); // constant 1
-	float C2 = (mut_0(dM) / mut_2(ms_2, ma_2)); // constant 2
-	float3 p;
-	
-	if (oldP.z <= layer)
-	{
-		//c.x ++;
-		/*if (newP.z <= layer)
-		{
-			outP.x += C1*(newP.x - oldP.x);
-			outP.y += C1*(newP.y - oldP.y);
-			outP.z += C1*(newP.z - oldP.z);
-		}
-		else
-		{                //定義在peusudo layer的位置 
-			p.x = (newP.z - oldP.z == 0.f) ? oldP.x : oldP.x + (layer - oldP.z) / (newP.z - oldP.z)*(newP.x - oldP.x);
-			p.y = (newP.z - oldP.z == 0.f) ? oldP.x : oldP.y + (layer - oldP.z) / (newP.z - oldP.z)*(newP.y - oldP.y);
-			p.z = layer;
-			//===================================================================
-			//step3 
-			//縮放在每一層pseudo layer內的水平位移，加總起來得到總共的水平位移
-			outP.x += C1*(p.x - oldP.x);
-			outP.y += C1*(p.y - oldP.y);
-			outP.z += C1*(p.z - oldP.z);
-
-			outP.x += C2*(newP.x - p.x);
-			outP.y += C2*(newP.y - p.y);
-			outP.z += C2*(newP.z - p.z);
-			//===================================================================
-		}*/
-	}
-	else
-	{
-		//c.y++;
-		/*if (newP.z >= layer)
-		{
-			outP.x += C2*(newP.x - oldP.x);
-			outP.y += C2*(newP.y - oldP.y);
-			outP.z += C2*(newP.z - oldP.z);
-		}
-		else
-		{                //定義在peusudo layer的位置 
-			p.x = (newP.z - oldP.z == 0.f) ? oldP.x : oldP.x + (layer - oldP.z) / (newP.z - oldP.z)*(newP.x - oldP.x);
-			p.y = (newP.z - oldP.z == 0.f) ? oldP.y : oldP.y + (layer - oldP.z) / (newP.z - oldP.z)*(newP.y - oldP.y);
-			p.z = layer;
-			//=================================================================
-			//step3 
-			//縮放在每一層pseudo layer內的水平位移，加總起來得到總共的水平位移
-			outP.x += C2*(p.x - oldP.x);
-			outP.y += C2*(p.y - oldP.y);
-			outP.z += C2*(p.z - oldP.z);
-
-			outP.x += C1*(newP.x - p.x);
-			outP.y += C1*(newP.y - p.y);
-			outP.z += C1*(newP.z - p.z);
-			//==================================================================
-		}*/
-	}
-}
-
-__device__ void scale(float ma_1, float ms_1, float ma_2, float ms_2, float thickness1, int &line_number, float3 newP, float3 &oldP, float3 &outP, int2 &count, media *dM)
-{
-	float peu_layer1 = thickness1*((ma_1 + ms_1) / mut_0(dM));	
-
+	//float peu_layer1 = (c1 == 0.f) ? thickness1 : thickness1 / c1;
+	c1 = 1, c2 = 1;
 	if (line_number == 0) {         //讀到資料第一筆資料 
 		oldP = newP;
 		outP = newP;
 	} else{     //開始shift
-		float C1 = (mut_0(dM) / mut_1(ms_1, ma_1)); // constant 1
-		float C2 = (mut_0(dM) / mut_2(ms_2, ma_2)); // constant 2
+		
 		float3 p;
 
 		if (oldP.z <= peu_layer1)
 		{
-			count.x ++;
+			crash.x++;
 			if (newP.z <= peu_layer1)
 			{
-				outP.x += C1*(newP.x - oldP.x);
-				outP.y += C1*(newP.y - oldP.y);
-				outP.z += C1*(newP.z - oldP.z);
+				outP.x += c1*(newP.x - oldP.x);
+				outP.y += c1*(newP.y - oldP.y);
+				outP.z += c1*(newP.z - oldP.z);
 			}
-			else
+			else	//===================================================================
 			{                //定義在peusudo layer的位置
 				p.x = (newP.z - oldP.z == 0.f) ? oldP.x : oldP.x + (peu_layer1 - oldP.z) / (newP.z - oldP.z)*(newP.x - oldP.x);
 				p.y = (newP.z - oldP.z == 0.f) ? oldP.x : oldP.y + (peu_layer1 - oldP.z) / (newP.z - oldP.z)*(newP.y - oldP.y);
@@ -775,20 +721,19 @@ __device__ void scale(float ma_1, float ms_1, float ma_2, float ms_2, float thic
 				//===================================================================
 				//step3
 				//縮放在每一層pseudo layer內的水平位移，加總起來得到總共的水平位移
-				outP.x += (C1*(p.x - oldP.x) + C2*(newP.x - p.x));
-				outP.y += (C1*(p.y - oldP.y) + C2*(newP.y - p.y));
-				outP.z += (C1*(p.z - oldP.z) + C2*(newP.z - p.z));
-				//===================================================================
+				outP.x += (c1*(p.x - oldP.x) + c2*(newP.x - p.x));
+				outP.y += (c1*(p.y - oldP.y) + c2*(newP.y - p.y));
+				outP.z += (c1*(p.z - oldP.z) + c2*(newP.z - p.z));
 			}
 		}
 		else
 		{
-			count.y++;
+			crash.y++;
 			if (newP.z >= peu_layer1)
 			{
-				outP.x += C2*(newP.x - oldP.x);
-				outP.y += C2*(newP.y - oldP.y);
-				outP.z += C2*(newP.z - oldP.z);
+				outP.x += c2*(newP.x - oldP.x);
+				outP.y += c2*(newP.y - oldP.y);
+				outP.z += c2*(newP.z - oldP.z);
 			}
 			else
 			{                //定義在peusudo layer的位置
@@ -798,9 +743,9 @@ __device__ void scale(float ma_1, float ms_1, float ma_2, float ms_2, float thic
 				//=================================================================
 				//step3
 				//縮放在每一層pseudo layer內的水平位移，加總起來得到總共的水平位移
-				outP.x += (C1*(newP.x - p.x)+C2*(p.x - oldP.x));
-				outP.y += (C1*(newP.y - p.y)+C2*(p.y - oldP.y));
-				outP.z += (C1*(newP.z - p.z)+C2*(p.z - oldP.z));
+				outP.x += (c1*(newP.x - p.x)+c2*(p.x - oldP.x));
+				outP.y += (c1*(newP.y - p.y)+c2*(p.y - oldP.y));
+				outP.z += (c1*(newP.z - p.z)+c2*(p.z - oldP.z));
 				//==================================================================
 			}
 		}
@@ -868,13 +813,13 @@ void MonteCarlo(photon * dPhotonArray, ScalingResult *dData, float *Grid, float 
 
 	// validate the coordinates of photon on the 'PATH' array
 	ofstream PATHFILE;
-	PATHFILE.open("/home/chao/Desktop/SMC/PATH.txt");
+	PATHFILE.open("C://Users//AZSXDCFVGBHNJ4Y6//Desktop//SMC_GPU//x64//Release//PATH.txt");
 
 	for (int i = 0; i < Threshold; i++) {
 		PATHFILE << i << ":\t" << hPATH[i].x << "\t" << hPATH[i].y << "\t" << hPATH[i].z << "\t" << hPATH[1023 * Threshold + i].x << "\t" << hPATH[1023 * Threshold + i].y << "\t" << hPATH[1023 * Threshold + i].z << endl;
 	}
 	PATHFILE.close();
-	
+	free(hPATH);
 }
 
 
@@ -891,8 +836,8 @@ void MC_Migraiton()
 	get_fiber_parameters(dF);
 
 	// setting the coefficients of absorbing and scattering
-	float UpLayerCoefficient, A_UpLayer, K_UpLayer, Hb_BottomLayer, Sto2_BottomLayer, A_BottomLayer, K_BottomLayer, Thickness_UpLayer;
-	get_optical_property(UpLayerCoefficient, A_UpLayer, K_UpLayer, Hb_BottomLayer, Sto2_BottomLayer, A_BottomLayer, K_BottomLayer, Thickness_UpLayer);
+	float UpLayerCoefficient, A_UpLayer, K_UpLayer, Hb_BottomLayer, Sto2_BottomLayer, A_BottomLayer, K_BottomLayer, Thickness_UpLayer, Collagen;
+	get_optical_property(UpLayerCoefficient, A_UpLayer, K_UpLayer, Hb_BottomLayer, Sto2_BottomLayer, A_BottomLayer, K_BottomLayer, Thickness_UpLayer, Collagen);
 
 	float *h_ma1_out = (float *)malloc(LamdaNumber*sizeof(float));
 	float *h_ma2_out = (float *)malloc(LamdaNumber*sizeof(float));
@@ -900,7 +845,7 @@ void MC_Migraiton()
 	float *h_ms2_out = (float *)malloc(LamdaNumber*sizeof(float));
 	mua_data_up(h_ma1_out, UpLayerCoefficient               , LamdaNumber);		//get上層吸收係數 
 	mus_data   (h_ms1_out, A_UpLayer      , K_UpLayer       , LamdaNumber);		//get上層散射係數 
-	mua_data   (h_ma2_out, Hb_BottomLayer , Sto2_BottomLayer, LamdaNumber);		//get下層吸收係數
+	mua_data   (h_ma2_out, Hb_BottomLayer , Sto2_BottomLayer, LamdaNumber, Collagen);		//get下層吸收係數
 	mus_data   (h_ms2_out, A_BottomLayer  , K_BottomLayer   , LamdaNumber);		//get下層散射係數 
 
 	float *d_ma1_out, *d_ma2_out, *d_ms1_out, *d_ms2_out;
@@ -937,7 +882,7 @@ void MC_Migraiton()
 	cout << "Photon Array      : " << (float)defaultNumPhoton / 1024 / 1024 * sizeof(photon) << "(MB)" << endl;	
 	cout << "Photon's PATH     : " << (float)blockSize*Threshold / 1024 / 1024 * sizeof(float3) << "(MB)" << endl;
 	cout << "Optical Parameters: " << (float)LamdaNumber * 4 / 1024 / 1024 * sizeof(float) << "(MB)" << endl;
-	cout << "Scaling Result    : " << (float)3 / 1024 / 1024 * sizeof(ScalingResult) << "(MB)" << endl;
+	cout << "Scaling Result    : " << (float)1 / 1024 / 1024 * sizeof(ScalingResult) << "(MB)" << endl;
 	cout << "Grid Structure    : " << (float)GridR * GridR * GridZ / 1024 / 1024 * sizeof(float) << "(MB)" << endl;
 
 	photon *hPhotoArray = (photon *)malloc(defaultNumPhoton * sizeof(photon));
@@ -958,7 +903,7 @@ void MC_Migraiton()
 	DataOutput(hData);
 
 	FILE *fp;
-	fp= fopen("/home/chao/Desktop/SMC/test.raw", "wb+");
+	fp= fopen("C://Users//AZSXDCFVGBHNJ4Y6//Desktop//SMC_GPU//x64//Release//test.raw", "wb+");
 	if (fp)	{
 		fwrite(hGrid, GridR * GridR * GridZ, sizeof(float), fp);
 		fclose(fp);
