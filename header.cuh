@@ -23,7 +23,7 @@
 #define Threshold  2048
 
 
-//¦b¦¹°Ï½Õ¾ã¥úÅÖ°Ñ¼Æ
+//åœ¨æ­¤å€èª¿æ•´å…‰çº–åƒæ•¸
 #define n_source 1.61
 #define n_detector 1.61
 #define n_Medium 1.4
@@ -53,7 +53,7 @@
 
 using namespace std;
 
-//µ{¦¡À³¥Îµ²ºc
+//ç¨‹å¼æ‡‰ç”¨çµæ§‹
 struct ArrayOfPhotonPath
 {
 	int Array_site;
@@ -113,7 +113,6 @@ __global__ void initCurand(curandState *state, unsigned long seed, int length);
 __device__ bool DetectionOfPhoton(fibers *FiberParameter, float ux, float uz, float Ndetector, int NumDetectors);
 __global__ void initializeData(ScalingResult *data, int Lambda, int NumberOfDetectors);
 __global__ void initializePATH(float3 *Path, int threshold);
-__global__ void testRG(float *dst, curandState *state, int length);
 __device__ void Launch(curandState &devState, photon &P, fibers *dF, long id, float Nsrc, int Detect);
 __device__ float fresnel(float n_in, float n_out, float uz);
 __device__ bool Specular(curandState &devState, float uz, media *dM);
