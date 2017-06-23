@@ -141,7 +141,7 @@ __device__ void Launch(curandState &state, photon &P, fibers *dF, long id, float
 __device__ float fresnel(float n_in, float n_out, float uz)
 {
 	float theta_in = acosf(fabs(uz));
-	float theta_t = asinf((n_in / n_out)*sin(theta_in));
+	float theta_t = asinf((n_in / n_out)*sinf(theta_in));
 
 	float R = 0.5 * ((sinf(theta_in - theta_t)*sinf(theta_in - theta_t))
 		/ (sinf(theta_in + theta_t)*sinf(theta_in + theta_t)) + (tanf(theta_in - theta_t)*tanf(theta_in - theta_t))
