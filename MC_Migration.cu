@@ -42,10 +42,10 @@ void get_fiber_parameters(fibers *dParameters)
 	for (int Number = 1; Number <= numberOfDetectors; Number++) {
 		hParameters[Number].radius = collect_r;
 		hParameters[Number].NA = NAOfDetector;
-		hParameters[Number].angle = AngleOfDetector * M_PI / 180;
+		hParameters[Number].angle = (float) AngleOfDetector * M_PI / 180;
 		//hParameters[Number].position = ((illumination_r)+(collect_r)*(2 * Number - 1)) / cos(AngleOfDetector * M_PI / 180);
 		//hParameters[Number].position = ((illumination_r)+(collect_r)*(0.1 * Number - 1)) / cos(AngleOfDetector * M_PI / 180);
-		hParameters[Number].position = (0.02 + 0.02*(Number-1))/ cos(AngleOfDetector * M_PI / 180);
+		hParameters[Number].position = (float) (0.02 + 0.02*(Number-1))/ cos(AngleOfDetector * M_PI / 180);
 	}
 
 	cudaMemcpy(dParameters, hParameters, sizeof(fibers)*(numberOfDetectors + 1), cudaMemcpyHostToDevice);
@@ -119,19 +119,19 @@ __device__ void Launch(curandState &state, photon &P, fibers *dF, long id, float
 	float rotated_angle = 2 * M_PI*rnd_rotated;
 
 	float launchPosition = dF[0].radius*sqrtf(rnd_position);
-	P.x = launchPosition*cos(AzimuthAngle) / cos(dF[0].angle);
-	P.y = launchPosition*sin(AzimuthAngle);
+	P.x = launchPosition*cosf(AzimuthAngle) / cosf(dF[0].angle);
+	P.y = launchPosition*sinf(AzimuthAngle);
 	P.z = 0.0;
 
-	float theta_direction = asin(dF[0].NA / Nsrc)*rnd_direction;
+	float theta_direction = asinf(dF[0].NA / Nsrc)*rnd_direction;
 
-	P.ux = (sin(theta_direction)*cos(rotated_angle)*cos(dF[0].angle))
-		- (cos(theta_direction)*sin(dF[0].angle));
+	P.ux = (sinf(theta_direction)*cosf(rotated_angle)*cosf(dF[0].angle))
+		- (cosf(theta_direction)*sinf(dF[0].angle));
 
-	P.uy = sin(theta_direction)*sin(rotated_angle);
+	P.uy = sinf(theta_direction)*sinf(rotated_angle);
 
-	P.uz = (sin(theta_direction)*cos(rotated_angle)*sin(dF[0].angle))
-		+ (cos(theta_direction)*cos(dF[0].angle));
+	P.uz = (sinf(theta_direction)*cosf(rotated_angle)*sinf(dF[0].angle))
+		+ (cosf(theta_direction)*cosf(dF[0].angle));
 	if (Detect == 0) {
 		P.x = 0, P.y = 0, P.z = 0;
 	}
@@ -140,12 +140,12 @@ __device__ void Launch(curandState &state, photon &P, fibers *dF, long id, float
 
 __device__ float fresnel(float n_in, float n_out, float uz)
 {
-	float theta_in = acos(fabs(uz));
-	float theta_t = asin((n_in / n_out)*sin(theta_in));
+	float theta_in = acosf(fabs(uz));
+	float theta_t = asinf((n_in / n_out)*sin(theta_in));
 
-	float R = 0.5 * ((sin(theta_in - theta_t)*sin(theta_in - theta_t))
-		/ (sin(theta_in + theta_t)*sin(theta_in + theta_t)) + (tan(theta_in - theta_t)*tan(theta_in - theta_t))
-		/ (tan(theta_in + theta_t)*tan(theta_in + theta_t)));
+	float R = 0.5 * ((sinf(theta_in - theta_t)*sinf(theta_in - theta_t))
+		/ (sinf(theta_in + theta_t)*sinf(theta_in + theta_t)) + (tanf(theta_in - theta_t)*tanf(theta_in - theta_t))
+		/ (tanf(theta_in + theta_t)*tanf(theta_in + theta_t)));
 
 	return R;
 }
@@ -165,9 +165,9 @@ __device__ bool Specular(curandState &state, float uz, media *dM)
 	theta_c = (n_out < n_in) ? asin(n_out / n_in) : M_PI / 2.0;
 
 
-	if (acos(fabs(uz)) >= theta_c) {	// total internal reflection       
+	if (acosf(fabs(uz)) >= theta_c) {	// total internal reflection       
 		specular_reflection = true;
-	} else if (acos(fabs(uz))<theta_c) {
+	} else if (acosf(fabs(uz))<theta_c) {
 		r = fresnel(n_in, n_out, uz);
 		rnd = curand_uniform(&state);	// Generates a random number in (0, 1) 
 		if (rnd <= r) {					// Internal reflection
@@ -210,12 +210,12 @@ __device__ void changeDirectionDueToRefraction(float &ux, float &uy, float &uz, 
 	}
 
 	// Incident and transmitted angles, respectively
-	float theta_i = acos(fabs(uz));
-	float theta_t = asin((n_in*sin(theta_i)) / n_out);
+	float theta_i = acosf(fabs(uz));
+	float theta_t = asinf((n_in*sinf(theta_i)) / n_out);
 
 	ux = (ux)*(n_in / n_out);
 	uy = (uy)*(n_in / n_out);
-	uz = (sign(uz))*cos(theta_t);
+	uz = (sign(uz))*cosf(theta_t);
 }
 
 __device__ void ModifyPositionAndDirection(float3 *dPATH, float *Grid, curandState devState, photon &P, int &layer, media *dM, bool TIF, int tid, int NUM)
@@ -258,10 +258,10 @@ __device__ bool checkForTIF(curandState &state, photon P, int &layer, media *dM)
 	}
 	// Calculates the critical angle 
 	if (n_out<n_in)	{// Total internal reflection possible
-		theta_c = asin(n_out / n_in);
+		theta_c = asinf(n_out / n_in);
 
 		
-		if (acos(fabs(P.uz)) >= theta_c) {	// Total internal reflection
+		if (acosf(fabs(P.uz)) >= theta_c) {	// Total internal reflection
 			TIF = true;
 		} else	{
 			r = fresnel(n_in, n_out, P.uz);
@@ -305,11 +305,11 @@ __device__ void direction(curandState &state, float &ux, float &uy, float &uz, i
 
 	if (g == 0) {
 		rn = curand_uniform(&state);
-		theta = acos(2 * rn - 1);
+		theta = acosf(2 * rn - 1);
 	} else {
 		rn = curand_uniform(&state);
 		temp = (1 - g*g) / (1 - g + 2 * g*rn);
-		theta = acos((1 / (2 * g))*(1 + g*g - (temp*temp)));
+		theta = acosf((1 / (2 * g))*(1 + g*g - (temp*temp)));
 	}
 
 	rn = curand_uniform(&state);
@@ -317,13 +317,13 @@ __device__ void direction(curandState &state, float &ux, float &uy, float &uz, i
 	phi = 2 * M_PI * rn;
 
 	if (abs(uz)>0.9999) {
-		uxprime = sin(theta)*cos(phi);
-		uyprime = sin(theta)*sin(phi);
-		uzprime = uz*cos(theta) / abs(uz);
+		uxprime = sinf(theta)*cosf(phi);
+		uyprime = sinf(theta)*sinf(phi);
+		uzprime = uz*cosf(theta) / abs(uz);
 	} else {
-		uxprime = sin(theta) / sqrt(1 - uz*uz)*(ux*uz*cos(phi) - uy*sin(phi)) + ux*cos(theta);
-		uyprime = sin(theta) / sqrt(1 - uz*uz)*(uy*uz*cos(phi) + ux*sin(phi)) + uy*cos(theta);
-		uzprime = -sin(theta)*cos(phi)*sqrt(1 - ((uz)*(uz))) + uz*cos(theta);
+		uxprime = sinf(theta) / sqrtf(1 - uz*uz)*(ux*uz*cosf(phi) - uy*sinf(phi)) + ux*cosf(theta);
+		uyprime = sinf(theta) / sqrtf(1 - uz*uz)*(uy*uz*cosf(phi) + ux*sinf(phi)) + uy*cosf(theta);
+		uzprime = -sinf(theta)*cosf(phi)*sqrtf(1 - ((uz)*(uz))) + uz*cosf(theta);
 	}
 
 	ux = uxprime;
@@ -636,13 +636,13 @@ __device__ void Scaling(ScalingResult *dData, float3 *dPATH, int tid, int NUM, f
 						float FirstItem = 0.0, SecondItem = 0.0, ThirdItem = 0.0;
 						FirstItem = (Collect2Source - x);
 
-						SecondItem = acos((Collect2Source*Collect2Source + (Collect2Source - x)*(Collect2Source - x) - illumination_r*illumination_r) / (2 * (Collect2Source - x)*Collect2Source));
+						SecondItem = acosf((Collect2Source*Collect2Source + (Collect2Source - x)*(Collect2Source - x) - illumination_r*illumination_r) / (2 * (Collect2Source - x)*Collect2Source));
 						if ((Collect2Source*Collect2Source + (Collect2Source - x)*(Collect2Source - x) - illumination_r*illumination_r) / (2 * (Collect2Source - x)*Collect2Source) >= 1)
 						{
 							SecondItem = 0.0;
 						}
 
-						ThirdItem = acos((r*r + (Collect2Source - x)*(Collect2Source - x) - collect_r*collect_r) / (2 * (Collect2Source - x)*r));
+						ThirdItem = acosf((r*r + (Collect2Source - x)*(Collect2Source - x) - collect_r*collect_r) / (2 * (Collect2Source - x)*r));
 
 						if ((r*r + (Collect2Source - x)*(Collect2Source - x) - collect_r*collect_r) / (2 * (Collect2Source - x)*r) >= 1)
 						{
@@ -671,8 +671,8 @@ __device__ void Scaling(ScalingResult *dData, float3 *dPATH, int tid, int NUM, f
 		{
 			for (int f = 1; f <= numberOfDetectors; f++)
 			{
-				if ((((outP.x - dF[f].position) / (dF[f].radius / cos(dF[f].angle)))*
-					((outP.x - dF[f].position) / (dF[f].radius / cos(dF[f].angle)))) +
+				if ((((outP.x - dF[f].position) / (dF[f].radius / cosf(dF[f].angle)))*
+					((outP.x - dF[f].position) / (dF[f].radius / cosf(dF[f].angle)))) +
 					(((outP.y) / dF[f].radius)*((outP.y) / dF[f].radius)) <= 1.0)
 				{
 					dData[0].r_vs_weight[i][f - 1] += weight;
@@ -759,10 +759,10 @@ __device__ float p(float x, float s, float r)
 	FirstItem = (s - x);
 
 	float temp1 = (s*s + (s - x)*(s - x) - illumination_r*illumination_r) / (2 * (s - x)*s);
-	SecondItem = (temp1 >= 1) ? 0.f : acos(temp1);
+	SecondItem = (temp1 >= 1) ? 0.f : acosf(temp1);
 
 	float temp2 = (r*r + (s - x)*(s - x) - collect_r*collect_r) / (2 * (s - x)*r);
-	ThirdItem = (temp2 >= 1) ? 0.f : acos(temp2);
+	ThirdItem = (temp2 >= 1) ? 0.f : acosf(temp2);
 
 	return FirstItem*SecondItem*ThirdItem;
 }
