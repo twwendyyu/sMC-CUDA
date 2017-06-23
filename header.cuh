@@ -134,7 +134,7 @@ __device__ void RecordPath(float3 *dPATH, float *Grid, photon P, int tid, int NU
 __device__ void ClearRecordPath(float3 *dPATH, int tid);
 __device__ void ClearRecordPath();
 void get_optical_property(float & UpLayerCoefficient, float & A_UpLayer, float & K_UpLayer, float & Hb_BottomLayer, float & Sto2_BottomLayer, float & A_BottomLayer, float &K_BottomLayer, float &Thickness_UpLayer);
-void mua_data(float *mua_out, float f, float sto2, int length);
+void mua_data(float *mua_out, float f, float sto2, int length, float col);
 void mua_data_up(float *mua_out, float up_c, int length);
 void mus_data(float *mus, float A, float K, int length);
 void DataOutput(ScalingResult data);

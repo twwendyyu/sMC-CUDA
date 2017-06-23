@@ -45,7 +45,7 @@ void get_fiber_parameters(fibers *dParameters)
 		hParameters[Number].angle = AngleOfDetector * M_PI / 180;
 		//hParameters[Number].position = ((illumination_r)+(collect_r)*(2 * Number - 1)) / cos(AngleOfDetector * M_PI / 180);
 		//hParameters[Number].position = ((illumination_r)+(collect_r)*(0.1 * Number - 1)) / cos(AngleOfDetector * M_PI / 180);
-		hParameters[Number].position = (0.02+0.02*(Number-1))/ cos(AngleOfDetector * M_PI / 180);  //Wang modified
+		hParameters[Number].position = (0.02 + 0.02*(Number-1))/ cos(AngleOfDetector * M_PI / 180);
 	}
 
 	cudaMemcpy(dParameters, hParameters, sizeof(fibers)*(numberOfDetectors + 1), cudaMemcpyHostToDevice);
