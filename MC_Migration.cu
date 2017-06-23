@@ -107,15 +107,8 @@ __global__ void initializePATH(float3 *Path, int threshold)
 	}
 }
 
-__global__ void testRG(float *dst, curandState *state, int length)
-{
-	int idx = blockDim.x*blockIdx.x + threadIdx.x;
-	if (idx < length) {
-		dst[idx] = curand_uniform(&state[idx]);
-	}
-}
 //Initialize position and direction of light with consideration of NA and angle of fiber
-__device__ void Launch(curandState &state, photon &P, fibers *dF, long id, float Nsrc, int Detect) //ªì©l¤Æ¥ú¤l¤@¶}©lªº¦ì¸m¡B¤è¦V¡BÅv­« 
+__device__ void Launch(curandState &state, photon &P, fibers *dF, long id, float Nsrc, int Detect) //åˆå§‹åŒ–å…‰å­ä¸€é–‹å§‹çš„ä½ç½®ã€æ–¹å‘ã€æ¬Šé‡ 
 {
 	float rnd_position  = curand_uniform(&state);
 	float rnd_Azimuth   = curand_uniform(&state);
@@ -236,13 +229,11 @@ __device__ void ModifyPositionAndDirection(float3 *dPATH, float *Grid, curandSta
 	}
 
 	if (TIF) {
-//		photon_record.Array_site -= 1;
 		move(dPATH, Grid, P, getUnitStep(devState, layer, dM), tid, NUM);
 		DIB = -DIB;
 		P.uz = -P.uz;
 		move(dPATH, Grid, P, getUnitStep(devState, layer, dM), tid, NUM);
 	} else {
-//		photon_record.Array_site -= 1;
 		move(dPATH, Grid, P, getUnitStep(devState, layer, dM), tid, NUM);
 		changeDirectionDueToRefraction(P.ux, P.uy, P.uz, dM);
 	}
@@ -340,7 +331,7 @@ __device__ void direction(curandState &state, float &ux, float &uy, float &uz, i
 	uz = uzprime;
 }
 
-//§PÂ_ ¥ú¤l¬O§_¦s¬¡  (·í¥ú¤l³Q§l¦¬¨ì«Ü¤p®É¤~·|»İ­n°µ¦¹§PÂ_ (¦btest_in_tissue·|¥Î¨ì)) 
+//åˆ¤æ–· å…‰å­æ˜¯å¦å­˜æ´»  (ç•¶å…‰å­è¢«å¸æ”¶åˆ°å¾ˆå°æ™‚æ‰æœƒéœ€è¦åšæ­¤åˆ¤æ–· (åœ¨test_in_tissueæœƒç”¨åˆ°)) 
 __device__ void roulette(bool &absorb, float &weight, unsigned int seed, photon P, int layer, media *dM, float roulette_m)
 {
 	curandState state;
@@ -428,7 +419,7 @@ void get_optical_property(float & UpLayerCoefficient, float & A_UpLayer, float &
 	A_BottomLayer = A_BottomLayer * 10000;
 }
 
-//¿é¤J extinct coefficient ¨Ã­pºâ ¥ú¾Ç°Ñ¼Æ
+//è¼¸å…¥ extinct coefficient ä¸¦è¨ˆç®— å…‰å­¸åƒæ•¸
 void mua_data(float *mua_out, float f, float sto2, int length, float col)
 {
 	float  lamda, hemo, oxhemo, collagen_ab;
@@ -549,14 +540,13 @@ __global__ void runPhoton(photon *P, ScalingResult *dData, curandState *devState
 					run_number++;
 				}
 
-				if (run_number > Threshold) { ClearRecordPath(dPATH, tid); Absorb = true; } //µø¬°§l¦¬
+				if (run_number > Threshold) { ClearRecordPath(dPATH, tid); Absorb = true; } //è¦–ç‚ºå¸æ”¶
 
 				if (Reflect && run_number < Threshold &&  DetectionOfPhoton(dF, P[gid].ux, P[gid].uz, Ndetector, NumDetectors)) {
 					Scaling(dData, dPATH, tid, run_number, ma1, ms1, ma2, ms2, Thickness_UpLayer, dM, dF);
 				}
 			}			
 			ClearRecordPath(dPATH, tid);
-			//P[gid].z = dPATH[blockSize * Threshold - 1].z;// mut_0(dM) / (ms1[275] + ma1[275]);
 		}		
 	}
 	__syncthreads();
@@ -615,7 +605,6 @@ __device__ void Scaling(ScalingResult *dData, float3 *dPATH, int tid, int NUM, f
 				CounterOfPhotons++;
 			}
 		} while (Flag && run_number < CounterOfPhotons);
-		//dPATH[blockSize * Threshold - 1].z = outP.x;
 
 		float r = (outP.x * outP.x + outP.y * outP.y > 0.0f) ? sqrtf(outP.x * outP.x + outP.y * outP.y) : 0.f;
 
@@ -697,10 +686,10 @@ __device__ void scale(float c1, float c2, float peu_layer1, int &line_number, fl
 {
 	//float peu_layer1 = (c1 == 0.f) ? thickness1 : thickness1 / c1;
 	c1 = 1, c2 = 1;
-	if (line_number == 0) {         //Åª¨ì¸ê®Æ²Ä¤@µ§¸ê®Æ 
+	if (line_number == 0) {         //è®€åˆ°è³‡æ–™ç¬¬ä¸€ç­†è³‡æ–™ 
 		oldP = newP;
 		outP = newP;
-	} else{     //¶}©lshift
+	} else{     //é–‹å§‹shift
 		
 		float3 p;
 
@@ -714,13 +703,13 @@ __device__ void scale(float c1, float c2, float peu_layer1, int &line_number, fl
 				outP.z += c1*(newP.z - oldP.z);
 			}
 			else	//===================================================================
-			{                //©w¸q¦bpeusudo layerªº¦ì¸m
+			{                //å®šç¾©åœ¨peusudo layerçš„ä½ç½®
 				p.x = (newP.z - oldP.z == 0.f) ? oldP.x : oldP.x + (peu_layer1 - oldP.z) / (newP.z - oldP.z)*(newP.x - oldP.x);
 				p.y = (newP.z - oldP.z == 0.f) ? oldP.x : oldP.y + (peu_layer1 - oldP.z) / (newP.z - oldP.z)*(newP.y - oldP.y);
 				p.z = peu_layer1;
 				//===================================================================
 				//step3
-				//ÁY©ñ¦b¨C¤@¼hpseudo layer¤ºªº¤ô¥­¦ì²¾¡A¥[Á`°_¨Ó±o¨ìÁ`¦@ªº¤ô¥­¦ì²¾
+				//ç¸®æ”¾åœ¨æ¯ä¸€å±¤pseudo layerå…§çš„æ°´å¹³ä½ç§»ï¼ŒåŠ ç¸½èµ·ä¾†å¾—åˆ°ç¸½å…±çš„æ°´å¹³ä½ç§»
 				outP.x += (c1*(p.x - oldP.x) + c2*(newP.x - p.x));
 				outP.y += (c1*(p.y - oldP.y) + c2*(newP.y - p.y));
 				outP.z += (c1*(p.z - oldP.z) + c2*(newP.z - p.z));
@@ -736,13 +725,13 @@ __device__ void scale(float c1, float c2, float peu_layer1, int &line_number, fl
 				outP.z += c2*(newP.z - oldP.z);
 			}
 			else
-			{                //©w¸q¦bpeusudo layerªº¦ì¸m
+			{                //å®šç¾©åœ¨peusudo layerçš„ä½ç½®
 				p.x = (newP.z - oldP.z == 0.f) ? oldP.x : oldP.x + (peu_layer1 - oldP.z) / (newP.z - oldP.z)*(newP.x - oldP.x);
 				p.y = (newP.z - oldP.z == 0.f) ? oldP.y : oldP.y + (peu_layer1 - oldP.z) / (newP.z - oldP.z)*(newP.y - oldP.y);
 				p.z = peu_layer1;
 				//=================================================================
 				//step3
-				//ÁY©ñ¦b¨C¤@¼hpseudo layer¤ºªº¤ô¥­¦ì²¾¡A¥[Á`°_¨Ó±o¨ìÁ`¦@ªº¤ô¥­¦ì²¾
+				//ç¸®æ”¾åœ¨æ¯ä¸€å±¤pseudo layerå…§çš„æ°´å¹³ä½ç§»ï¼ŒåŠ ç¸½èµ·ä¾†å¾—åˆ°ç¸½å…±çš„æ°´å¹³ä½ç§»
 				outP.x += (c1*(newP.x - p.x)+c2*(p.x - oldP.x));
 				outP.y += (c1*(newP.y - p.y)+c2*(p.y - oldP.y));
 				outP.z += (c1*(newP.z - p.z)+c2*(p.z - oldP.z));
@@ -843,10 +832,10 @@ void MC_Migraiton()
 	float *h_ma2_out = (float *)malloc(LamdaNumber*sizeof(float));
 	float *h_ms1_out = (float *)malloc(LamdaNumber*sizeof(float));
 	float *h_ms2_out = (float *)malloc(LamdaNumber*sizeof(float));
-	mua_data_up(h_ma1_out, UpLayerCoefficient               , LamdaNumber);		//get¤W¼h§l¦¬«Y¼Æ 
-	mus_data   (h_ms1_out, A_UpLayer      , K_UpLayer       , LamdaNumber);		//get¤W¼h´²®g«Y¼Æ 
-	mua_data   (h_ma2_out, Hb_BottomLayer , Sto2_BottomLayer, LamdaNumber, Collagen);		//get¤U¼h§l¦¬«Y¼Æ
-	mus_data   (h_ms2_out, A_BottomLayer  , K_BottomLayer   , LamdaNumber);		//get¤U¼h´²®g«Y¼Æ 
+	mua_data_up(h_ma1_out, UpLayerCoefficient               , LamdaNumber);		//getä¸Šå±¤å¸æ”¶ä¿‚æ•¸ 
+	mus_data   (h_ms1_out, A_UpLayer      , K_UpLayer       , LamdaNumber);		//getä¸Šå±¤æ•£å°„ä¿‚æ•¸ 
+	mua_data   (h_ma2_out, Hb_BottomLayer , Sto2_BottomLayer, LamdaNumber, Collagen);		//getä¸‹å±¤å¸æ”¶ä¿‚æ•¸
+	mus_data   (h_ms2_out, A_BottomLayer  , K_BottomLayer   , LamdaNumber);		//getä¸‹å±¤æ•£å°„ä¿‚æ•¸ 
 
 	float *d_ma1_out, *d_ma2_out, *d_ms1_out, *d_ms2_out;
 	cudaMalloc((void **)&d_ma1_out, sizeof(float)*LamdaNumber);
