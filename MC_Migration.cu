@@ -229,12 +229,12 @@ __device__ void ModifyPositionAndDirection(float3 *dPATH, float *Grid, curandSta
 	}
 
 	if (TIF) {
-		move(dPATH, Grid, P, getUnitStep(devState, layer, dM), tid, NUM);
+		move(dPATH, Grid, P, DIB, tid, NUM);
 		DIB = -DIB;
 		P.uz = -P.uz;
-		move(dPATH, Grid, P, getUnitStep(devState, layer, dM), tid, NUM);
+		move(dPATH, Grid, P, DIB, tid, NUM);
 	} else {
-		move(dPATH, Grid, P, getUnitStep(devState, layer, dM), tid, NUM);
+		move(dPATH, Grid, P, DIB, tid, NUM);
 		changeDirectionDueToRefraction(P.ux, P.uy, P.uz, dM);
 	}
 
