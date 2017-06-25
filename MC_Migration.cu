@@ -474,8 +474,8 @@ void DataOutput(ScalingResult *data)
 	ofstream foutForTotalRefelectance;
 	ofstream foutForReflectanceWithDistance;
 
-	foutForTotalRefelectance.open("C://Users//AZSXDCFVGBHNJ4Y6//Desktop//SMC_GPU//x64//Release//two_layer_mc_weight_with_scale.txt");
-	foutForReflectanceWithDistance.open("C://Users//AZSXDCFVGBHNJ4Y6//Desktop//SMC_GPU//x64//Release//two_layer_mc_weight_with_scale_and_r.txt");
+	foutForTotalRefelectance.open("two_layer_mc_weight_with_scale.txt");
+	foutForReflectanceWithDistance.open("two_layer_mc_weight_with_scale_and_r.txt");
 
 	int x = 0;
 
@@ -802,7 +802,7 @@ void MonteCarlo(photon * dPhotonArray, ScalingResult *dData, float *Grid, float 
 
 	// validate the coordinates of photon on the 'PATH' array
 	ofstream PATHFILE;
-	PATHFILE.open("C://Users//AZSXDCFVGBHNJ4Y6//Desktop//SMC_GPU//x64//Release//PATH.txt");
+	PATHFILE.open("PATH.txt");
 
 	for (int i = 0; i < Threshold; i++) {
 		PATHFILE << i << ":\t" << hPATH[i].x << "\t" << hPATH[i].y << "\t" << hPATH[i].z << "\t" << hPATH[1023 * Threshold + i].x << "\t" << hPATH[1023 * Threshold + i].y << "\t" << hPATH[1023 * Threshold + i].z << endl;
@@ -892,7 +892,7 @@ void MC_Migraiton()
 	DataOutput(hData);
 
 	FILE *fp;
-	fp= fopen("C://Users//AZSXDCFVGBHNJ4Y6//Desktop//SMC_GPU//x64//Release//test.raw", "wb+");
+	fp= fopen("test.raw", "wb+");
 	if (fp)	{
 		fwrite(hGrid, GridR * GridR * GridZ, sizeof(float), fp);
 		fclose(fp);
